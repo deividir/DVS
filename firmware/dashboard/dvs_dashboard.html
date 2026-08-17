@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DVS Receiver Monitor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 22px; letter-spacing: 1px; }
+  h1 span { color: #58a6ff; }
+  .badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge.on { background: #1a7f37; color: #fff; }
+  .badge.off { background: #30363d; color: #8b949e; }
+  .btn {
+    background: #238636;
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn:hover { background: #2ea043; }
+  .btn.danger { background: #da3633; }
+  .btn.danger:hover { background: #f85149; }
+  .btn.small { padding: 6px 12px; font-size: 12px; }
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar .label { color: #8b949e; font-size: 13px; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .card h2 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .deck { color: #58a6ff; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot.green { background: #3fb950; box-shadow: 0 0 8px #3fb950; }
+  .dot.red { background: #f85149; box-shadow: 0 0 8px #f85149; }
+  .dot.gray { background: #484f58; }
+  .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #21262d;
+    font-size: 14px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .label { color: #8b949e; }
+  .row .value { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .battery-bar {
+    width: 100px;
+    height: 8px;
+    background: #21262d;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-left: 8px;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .battery-fill { display: block; height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .battery-fill.good { background: #3fb950; }
+  .battery-fill.mid { background: #d29922; }
+  .battery-fill.low { background: #f85149; }
+  .rssi-bars { display: inline-flex; gap: 2px; align-items: flex-end; margin-left: 6px; }
+  .rssi-bars .bar { width: 5px; background: #58a6ff; border-radius: 1px; }
+  .log {
+    margin-top: 16px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 12px;
+    max-height: 180px;
+    overflow-y: auto;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    color: #8b949e;
+  }
+  .log .line { padding: 2px 0; border-bottom: 1px dashed #21262d; }
+  .log .line:last-child { border-bottom: none; }
+  .warning { color: #d29922; }
+  .good { color: #3fb950; }
+  .bad { color: #f85149; }
+  .info-msg { color: #8b949e; font-size: 13px; margin-top: 8px; }
+  .disc { display: block; margin: 8px auto; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>DVS <span>RECEIVER MONITOR</span></h1>
+    <div>
+      <span id="linkBadge" class="badge off">Desconectado</span>
+      <button id="btnConnect" class="btn">Conectar</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <span class="label">Teste de DAC (tom 1kHz):</span>
+    <button id="btnTestA" class="btn small">Testar DAC A</button>
+    <button id="btnTestB" class="btn small">Testar DAC B</button>
+    <button id="btnTestOff" class="btn small danger">Parar</button>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2><span class="dot gray" id="dotA"></span> Deck <span class="deck">A</span></h2>
+      <canvas class="disc" id="discA" width="140" height="140"></canvas>
+      <div class="row"><span class="label">Estado</span><span class="value" id="statusA">--</span></div>
+      <div class="row"><span class="label">Sinal (RSSI)</span><span class="value" id="rssiA">--<span class="rssi-bars" id="barsA"></span></span></div>
+      <div class="row"><span class="label">Bateria TX</span><span class="value" id="battA">--<span class="battery-bar"><span class="battery-fill" id="battFillA" style="width:0%"></span></span></span></div>
+      <div class="row"><span class="label">RPM</span><span class="value" id="rpmA">--</span></div>
+      <div class="row"><span class="label">Timecode</span><span class="value" id="tcA">--</span></div>
+      <div class="row"><span class="label">Pacotes perdidos</span><span class="value" id="lostA">--</span></div>
+      <div class="row"><span class="label">Chegada de pkt</span><span class="value" id="pktA">--</span></div>
+      <div class="row"><span class="label">Áudio (buf/0.5s)</span><span class="value" id="wrA">--</span></div>
+      <div class="row"><span class="label">Pico amostra</span><span class="value" id="pkA">--</span></div>
+      <div class="row"><span class="label">Erro I2S</span><span class="value" id="errA">--</span></div>
+      <div class="row"><span class="label">Tom teste</span><span class="value" id="toneA">--</span></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="dot gray" id="dotB"></span> Deck <span class="deck">B</span></h2>
+      <canvas class="disc" id="discB" width="140" height="140"></canvas>
+      <div class="row"><span class="label">Estado</span><span class="value" id="statusB">--</span></div>
+      <div class="row"><span class="label">Sinal (RSSI)</span><span class="value" id="rssiB">--<span class="rssi-bars" id="barsB"></span></span></div>
+      <div class="row"><span class="label">Bateria TX</span><span class="value" id="battB">--<span class="battery-bar"><span class="battery-fill" id="battFillB" style="width:0%"></span></span></span></div>
+      <div class="row"><span class="label">RPM</span><span class="value" id="rpmB">--</span></div>
+      <div class="row"><span class="label">Timecode</span><span class="value" id="tcB">--</span></div>
+      <div class="row"><span class="label">Pacotes perdidos</span><span class="value" id="lostB">--</span></div>
+      <div class="row"><span class="label">Chegada de pkt</span><span class="value" id="pktB">--</span></div>
+      <div class="row"><span class="label">Áudio (buf/0.5s)</span><span class="value" id="wrB">--</span></div>
+      <div class="row"><span class="label">Pico amostra</span><span class="value" id="pkB">--</span></div>
+      <div class="row"><span class="label">Erro I2S</span><span class="value" id="errB">--</span></div>
+      <div class="row"><span class="label">Tom teste</span><span class="value" id="toneB">--</span></div>
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+  <div class="info-msg" id="infoMsg">Clique em Conectar e selecione a porta do receptor (baud 115200). Funciona no Chrome/Edge.</div>
+</div>
+
+<script>
+let port = null;
+let reader = null;
+let writer = null;
+let buffer = '';
+let lastUpdate = 0;
+
+const $ = (id) => document.getElementById(id);
+
+const deckRpm = [0, 0];
+const deckAngle = [0, 0];
+const discCanvases = [$('discA'), $('discB')];
+let lastAnimTime = 0;
+
+const logEl = $('log');
+
+function logLine(text, cls) {
+  const line = document.createElement('div');
+  line.className = 'line ' + (cls || '');
+  line.textContent = text;
+  logEl.appendChild(line);
+  while (logEl.children.length > 200) logEl.removeChild(logEl.firstChild);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function rssiBars(rssi, container) {
+  container.innerHTML = '';
+  const levels = [-80, -70, -60, -50];
+  const heights = [6, 9, 12, 15];
+  levels.forEach((lvl, i) => {
+    const bar = document.createElement('span');
+    bar.className = 'bar';
+    bar.style.height = heights[i] + 'px';
+    bar.style.background = rssi >= lvl ? '#58a6ff' : '#30363d';
+    container.appendChild(bar);
+  });
+}
+
+function formatTimecode(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function updateDeck(idx, fields, tcSecs, pktAgeMs, wrPerHalfSec, toneOn, i2sErr, peakVal) {
+  const connected = fields[0] === '1';
+  const rssi = parseInt(fields[1], 10);
+  const batt = parseInt(fields[2], 10);
+  const rpm = parseInt(fields[3], 10) / 100;
+  const lost = parseInt(fields[4], 10);
+  deckRpm[idx] = (connected && Math.abs(rpm) >= 0.5) ? rpm : 0;
+
+  const dot = idx === 0 ? $('dotA') : $('dotB');
+  dot.className = 'dot ' + (connected ? 'green' : (rssi > -127 ? 'gray' : 'red'));
+
+  $('status' + (idx === 0 ? 'A' : 'B')).textContent = connected ? 'Conectado' : 'Desconectado';
+  $('status' + (idx === 0 ? 'A' : 'B')).className = 'value ' + (connected ? 'good' : 'bad');
+
+  const rssiEl = $(idx === 0 ? 'rssiA' : 'rssiB');
+  rssiEl.childNodes[0].textContent = (rssi <= -127) ? '--' : rssi + ' dBm';
+  rssiBars(rssi, idx === 0 ? $('barsA') : $('barsB'));
+
+  const battEl = idx === 0 ? $('battA') : $('battB');
+  battEl.childNodes[0].textContent = (batt < 0 || batt > 100) ? '--' : batt + '%';
+  const fill = idx === 0 ? $('battFillA') : $('battFillB');
+  const pct = (batt >= 0 && batt <= 100) ? batt : 0;
+  fill.style.width = pct + '%';
+  fill.style.background = pct > 40 ? '#3fb950' : pct > 15 ? '#d29922' : '#f85149';
+
+  $('rpm' + (idx === 0 ? 'A' : 'B')).textContent = connected ? rpm.toFixed(2) : '--';
+
+  const tEl = $(idx === 0 ? 'tcA' : 'tcB');
+  const secs = parseInt(tcSecs, 10);
+  tEl.textContent = (connected && !isNaN(secs) && secs >= 0) ? formatTimecode(secs) : '--';
+  tEl.className = 'value' + (secs > 700 ? ' bad' : '');
+  $('lost' + (idx === 0 ? 'A' : 'B')).textContent = connected ? lost + ' pkt' : '--';
+
+  const age = parseInt(pktAgeMs, 10);
+  $('pkt' + (idx === 0 ? 'A' : 'B')).textContent = (connected && !isNaN(age) && age >= 0) ? age + ' ms' : '--';
+
+  const wr = parseInt(wrPerHalfSec, 10);
+  $('wr' + (idx === 0 ? 'A' : 'B')).textContent = (!isNaN(wr) && wr >= 0) ? wr : '--';
+
+  const errCode = parseInt(i2sErr, 10);
+  const errEl = $('err' + (idx === 0 ? 'A' : 'B'));
+  errEl.textContent = (!isNaN(errCode)) ? (errCode === 0 ? 'OK' : '0x' + errCode.toString(16)) : '--';
+  errEl.className = 'value' + (errCode === 0 ? ' good' : (errCode ? ' bad' : ''));
+
+  const pk = parseInt(peakVal, 10);
+  const pkEl = $('pk' + (idx === 0 ? 'A' : 'B'));
+  pkEl.textContent = (!isNaN(pk) && pk >= 0) ? pk : '--';
+
+  const tone = parseInt(toneOn, 10);
+  const toneEl = $('tone' + (idx === 0 ? 'A' : 'B'));
+  toneEl.textContent = tone === 1 ? '1kHz ATIVO' : (tone === 0 ? 'off' : '--');
+  toneEl.className = 'value' + (tone === 1 ? ' good' : '');
+}
+
+function handleTelemetry(fields) {
+  updateDeck(0, fields.slice(2, 7), fields[12], fields[14], fields[16], fields[18], fields[20], fields[22]);
+  updateDeck(1, fields.slice(7, 12), fields[13], fields[15], fields[17], fields[19], fields[21], fields[23]);
+}
+
+function handleLine(line) {
+  line = line.trim();
+  if (!line) return;
+  if (line.startsWith('DVS_RX_READY')) {
+    logLine('Receptor conectado: ' + line);
+    $('infoMsg').textContent = 'Receptor conectado. Telemetria em tempo real.';
+    return;
+  }
+  if (line.startsWith('TELEM,')) {
+    handleTelemetry(line.split(','));
+    return;
+  }
+  if (line.startsWith('TEST_')) {
+    logLine('RX: ' + line);
+    return;
+  }
+  if (line.startsWith('I2S_WRITE_ERR')) {
+    logLine('RX: ' + line, 'bad');
+    return;
+  }
+}
+
+function drawDisc(idx) {
+  const canvas = discCanvases[idx];
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const size = canvas.width;
+  const c = size / 2;
+  const R = size / 2 - 10;
+
+  ctx.clearRect(0, 0, size, size);
+
+  // Disco
+  const grad = ctx.createRadialGradient(c, c, 4, c, c, R);
+  grad.addColorStop(0, '#161b22');
+  grad.addColorStop(1, '#0d1117');
+  ctx.beginPath();
+  ctx.arc(c, c, R, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Sulcos
+  ctx.strokeStyle = '#21262d';
+  ctx.lineWidth = 1;
+  for (let i = 1; i <= 6; i++) {
+    const r = R * (i / 7) + R * 0.04;
+    ctx.beginPath();
+    ctx.arc(c, c, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Rótulo central
+  ctx.beginPath();
+  ctx.arc(c, c, R * 0.28, 0, Math.PI * 2);
+  ctx.fillStyle = '#161b22';
+  ctx.fill();
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Linha que gira (como um riscado no vinil)
+  ctx.save();
+  ctx.translate(c, c);
+  ctx.rotate(deckAngle[idx]);
+  ctx.strokeStyle = '#58a6ff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(R * 0.3, 0);
+  ctx.lineTo(R, 0);
+  ctx.stroke();
+  ctx.restore();
+
+  // Furo central
+  ctx.beginPath();
+  ctx.arc(c, c, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#0d1117';
+  ctx.fill();
+}
+
+function animate(time) {
+  const dt = lastAnimTime ? (time - lastAnimTime) / 1000 : 0;
+  lastAnimTime = time;
+  for (let i = 0; i < 2; i++) {
+    const rpm = deckRpm[i];
+    if (rpm !== 0) {
+      deckAngle[i] += (rpm / 60.0) * Math.PI * 2 * dt;
+    }
+    drawDisc(i);
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+async function readLoop() {
+  const decoder = new TextDecoder();
+  try {
+    while (port.readable) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        handleLine(line);
+      }
+    }
+  } catch (e) {
+    logLine('Erro de leitura: ' + e.message, 'bad');
+  }
+}
+
+async function connect() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    reader = port.readable.getReader();
+    writer = port.writable.getWriter();
+    $('btnConnect').textContent = 'Desconectar';
+    $('btnConnect').className = 'btn danger';
+    $('linkBadge').textContent = 'Conectado';
+    $('linkBadge').className = 'badge on';
+    logLine('Porta serial aberta (115200 baud).');
+    readLoop();
+  } catch (e) {
+    logLine('Falha ao conectar: ' + e.message, 'bad');
+  }
+}
+
+async function sendSerialCmd(cmd) {
+  if (!port) { logLine('Conecte primeiro.', 'bad'); return; }
+  if (!writer) { logLine('Writer indisponível — recarregue a página.', 'bad'); return; }
+  try {
+    const encoder = new TextEncoder();
+    await writer.write(encoder.encode(cmd + '\n'));
+    logLine('Enviado: ' + cmd);
+  } catch (e) {
+    logLine('Falha ao enviar: ' + e.message, 'bad');
+  }
+}
+
+async function disconnect() {
+  try {
+    if (writer) {
+      try { if (typeof writer.release === 'function') writer.release(); } catch (e) {}
+      writer = null;
+    }
+    if (reader) { await reader.cancel(); reader = null; }
+    if (port) { await port.close(); port = null; }
+  } catch (e) {}
+  $('btnConnect').textContent = 'Conectar';
+  $('btnConnect').className = 'btn';
+  $('linkBadge').textContent = 'Desconectado';
+  $('linkBadge').className = 'badge off';
+  logLine('Porta serial fechada.');
+}
+
+$('btnConnect').addEventListener('click', () => {
+  if (port) disconnect();
+  else connect();
+});
+$('btnTestA').addEventListener('click', () => sendSerialCmd('TEST_A'));
+$('btnTestB').addEventListener('click', () => sendSerialCmd('TEST_B'));
+$('btnTestOff').addEventListener('click', () => sendSerialCmd('TEST_OFF'));
+</script>
+</body>
+</html>
